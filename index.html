@@ -1,0 +1,144 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Virbalis AR – Testas Nr. 3</title>
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <style>
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;font-family:Arial,sans-serif}
+    #status{position:fixed;z-index:30;top:16px;left:50%;transform:translateX(-50%);
+      max-width:88vw;padding:10px 14px;border-radius:18px;background:rgba(0,0,0,.72);
+      color:#fff;text-align:center;font-size:14px;pointer-events:none;transition:opacity .5s}
+    #start{position:fixed;z-index:40;left:50%;bottom:28px;transform:translateX(-50%);
+      border:0;border-radius:24px;padding:13px 20px;font-size:16px;background:#fff;color:#111}
+  </style>
+</head>
+<body>
+<div id="status">Paspausk „Pradėti“, tada nukreipk kamerą į Testo Nr. 3 markerį</div>
+<button id="start">Pradėti</button>
+<audio id="memory" src="./memory.mp3" preload="auto" loop></audio>
+
+<a-scene
+  mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; filterMinCF: 0.001; filterBeta: 0.01; missTolerance: 8; warmupTolerance: 5;"
+  color-space="sRGB"
+  renderer="colorManagement:true; physicallyCorrectLights:true; alpha:true"
+  vr-mode-ui="enabled:false"
+  device-orientation-permission-ui="enabled:false"
+  embedded>
+
+  <a-assets>
+    <img id="character" src="./character.png">
+  </a-assets>
+
+  <a-camera id="camera" position="0 0 0" look-controls="enabled:false"></a-camera>
+
+  <a-entity id="target" mindar-image-target="targetIndex: 0">
+
+    <!--
+      TESTO NR. 3 ERDVINĖ ILIUZIJA.
+      MindAR vienetai yra santykiniai markerio dydžiui, ne garantuoti fiziniai metrai.
+      Personažas sąmoningai pastumtas gilyn nuo markerio.
+    -->
+    <a-entity id="spatialGroup" position="0 0 -3.2">
+
+      <!-- švelnus šviesos/rūko laukas už personažo -->
+      <a-circle position="0 0.75 -0.08" radius="1.15"
+        material="shader:flat; color:#ffffff; transparent:true; opacity:0.075; side:double"
+        animation="property:material.opacity; from:0.035; to:0.11; dir:alternate; dur:2600; loop:true; easing:easeInOutSine">
+      </a-circle>
+
+      <a-circle position="-0.22 0.18 0.02" radius="0.62"
+        material="shader:flat; color:#ffffff; transparent:true; opacity:0.10; side:double"
+        animation="property:position; from:-0.28 0.15 0.02; to:0.18 0.27 0.02; dir:alternate; dur:4200; loop:true; easing:easeInOutSine">
+      </a-circle>
+
+      <a-circle position="0.28 0.30 0.03" radius="0.48"
+        material="shader:flat; color:#ffffff; transparent:true; opacity:0.075; side:double"
+        animation="property:position; from:0.30 0.28 0.03; to:-0.12 0.40 0.03; dir:alternate; dur:5100; loop:true; easing:easeInOutSine">
+      </a-circle>
+
+      <!-- 2D personažas kaip vertikali billboard plokštuma -->
+      <a-image id="person" src="#character"
+        position="0 0.78 0.08"
+        width="1.45" height="1.45"
+        material="shader:flat; transparent:true; alphaTest:0.02; side:double"
+        scale="1 1 1"
+        animation__breathe="property:scale; from:0.985 0.985 0.985; to:1.025 1.025 1.025; dir:alternate; dur:2200; loop:true; easing:easeInOutSine"
+        animation__float="property:position; from:0 0.76 0.08; to:0 0.81 0.08; dir:alternate; dur:3000; loop:true; easing:easeInOutSine">
+      </a-image>
+
+      <!-- subtilus "žemės" šešėlis -->
+      <a-circle position="0 0.04 0" rotation="-90 0 0" radius="0.48"
+        scale="1.5 0.45 1"
+        material="shader:flat; color:#000000; transparent:true; opacity:0.16; side:double">
+      </a-circle>
+    </a-entity>
+  </a-entity>
+</a-scene>
+
+<script>
+const target = document.querySelector('#target');
+const group = document.querySelector('#spatialGroup');
+const status = document.querySelector('#status');
+const start = document.querySelector('#start');
+const sound = document.querySelector('#memory');
+
+let unlocked = false;
+let found = false;
+let raf = null;
+
+start.addEventListener('click', async () => {
+  try {
+    sound.volume = 0;
+    await sound.play();
+    sound.pause();
+    sound.currentTime = 0;
+    sound.volume = 0.15;
+    unlocked = true;
+  } catch(e) {}
+  start.style.display='none';
+  status.textContent='Nukreipk kamerą į naują Testo Nr. 3 markerį';
+});
+
+function updateSpatialAudio(){
+  if(!found) return;
+  const camObj = document.querySelector('#camera').object3D;
+  const personObj = group.object3D;
+  const cam = new THREE.Vector3();
+  const pos = new THREE.Vector3();
+  camObj.getWorldPosition(cam);
+  personObj.getWorldPosition(pos);
+  const d = cam.distanceTo(pos);
+
+  // Santykinis AR atstumas: artėjant garsėja, tolstant tylėja.
+  const near = 1.0, far = 6.0;
+  let v = 1 - ((d-near)/(far-near));
+  v = Math.max(0.06, Math.min(1.0, v));
+  sound.volume = v;
+  raf = requestAnimationFrame(updateSpatialAudio);
+}
+
+target.addEventListener('targetFound', async () => {
+  found = true;
+  status.style.opacity='1';
+  status.textContent='✓ Atpažinta — pažiūrėk gilyn už markerio';
+  if(unlocked){
+    try { await sound.play(); } catch(e) {}
+  }
+  cancelAnimationFrame(raf);
+  updateSpatialAudio();
+  setTimeout(()=>status.style.opacity='0',2200);
+});
+
+target.addEventListener('targetLost', () => {
+  found = false;
+  cancelAnimationFrame(raf);
+  sound.pause();
+  status.style.opacity='1';
+  status.textContent='Markeris pamestas — grįžk kamera prie jo';
+});
+</script>
+</body>
+</html>
